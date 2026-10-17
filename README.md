@@ -102,6 +102,12 @@ The firmware turns every LED switch off and sets the DAC to 0 V on power-up,
 on `LED OFF`, when the USB host disconnects, and the page sends `LED OFF`
 before it closes the port. Sweeps end at 0 V.
 
+## Contributing
+
+Bug reports, measurement oddities, and ideas from the lab bench are all welcome —
+see [CONTRIBUTING.md](CONTRIBUTING.md) and the issue templates. This project
+follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+
 ## Releasing
 
 Releases are tagged `vX.Y.Z`. Pushing a tag builds the Arduino firmware and
