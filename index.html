@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<!--
+  LED I–V Lab — browser instrument
+  SPDX-License-Identifier: GPL-2.0-only
+  Copyright (C) 2026 Interactive Hardware Interfacing contributors
+  Source and license: https://github.com/interactive-hardware-interfacing/led-iv-lab
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LED I–V Lab</title>
+<meta name="description" content="Browser instrument for the LED I–V lab: select an LED, sweep the drive voltage, and plot forward voltage against current from an ItsyBitsy M4 over USB.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:   #f5f7f3;
+    --panel:   #ffffff;
+    --ink:     #1e2a23;
+    --ink-2:   #4f5d55;
+    --ink-3:   #8a948e;
+    --sage:    #7d9385;
+    --sage-2:  #c9d4cc;
+    --sage-3:  #e6ece7;
+    --moss:    #3d5c48;
+    --moss-2:  #2f4a39;
+    --led-r:   #c2342a;
+    --led-a:   #d4860b;
+    --led-g:   #3a8a3f;
+    --led-b:   #2f5fc4;
+    --ok:      #3a8a3f;
+    --warn:    #b8700a;
+    --err:     #c2342a;
+    --radius:  6px;
+    --font:    'Atkinson Hyperlegible', system-ui, sans-serif;
+    --mono:    'Spline Sans Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #161c18; --panel: #1f2721; --ink: #e8ece9; --ink-2: #aeb8b1; --ink-3: #74807a;
+      --sage: #8aa392; --sage-2: #3a4a40; --sage-3: #28332c; --moss: #8fc19e; --moss-2: #a6d1b3;
+      --led-r: #e2574c; --led-a: #e9a63a; --led-g: #5db563; --led-b: #6f93e8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #161c18; --panel: #1f2721; --ink: #e8ece9; --ink-2: #aeb8b1; --ink-3: #74807a;
+    --sage: #8aa392; --sage-2: #3a4a40; --sage-3: #28332c; --moss: #8fc19e; --moss-2: #a6d1b3;
+    --led-r: #e2574c; --led-a: #e9a63a; --led-g: #5db563; --led-b: #6f93e8;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.5;
+    padding: 0 16px 48px;
+  }
+  a { color: var(--moss); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+  :focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* ---------------------------------------------------------------- header */
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: 8px 24px; padding: 28px 0 18px;
+    border-bottom: 1px solid var(--sage-2);
+  }
+  header.top h1 { font-size: 1.6rem; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+  header.top .sub { color: var(--ink-2); margin: 0; }
+  header.top nav a { margin-left: 18px; font-size: .95rem; }
+
+  /* ---------------------------------------------------------------- connect bar */
+  .connect {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 16px 0;
+  }
+  .btn {
+    border: 1px solid var(--sage); background: var(--panel); color: var(--ink);
+    border-radius: var(--radius); padding: 8px 16px; line-height: 1.2;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--moss); }
+  .btn.primary { background: var(--moss); border-color: var(--moss); color: #fff; font-weight: 700; }
+  .btn.primary:hover:not(:disabled) { background: var(--moss-2); border-color: var(--moss-2); }
+  :root[data-theme="dark"] .btn.primary, :root:not([data-theme="light"]) .btn.primary { color: var(--paper); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .btn.primary { color: #fff; } }
+  .btn.small { padding: 5px 11px; font-size: .9rem; }
+  .status { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); }
+  .status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
+  .status.ok .dot { background: var(--ok); }
+  .status.demo .dot { background: var(--warn); }
+  .status.err .dot { background: var(--err); }
+  .notice {
+    background: var(--sage-3); border-left: 3px solid var(--sage); border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 10px 14px; margin: 0 0 12px; color: var(--ink-2); font-size: .95rem;
+  }
+  .notice.hidden { display: none; }
+
+  /* ---------------------------------------------------------------- layout */
+  .bench {
+    display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start;
+  }
+  @media (max-width: 860px) { .bench { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--sage-2); border-radius: var(--radius);
+    padding: 18px;
+  }
+  .panel h2 { font-size: 1rem; margin: 0 0 12px; font-weight: 700; color: var(--ink-2); }
+  .panel + .panel { margin-top: 20px; }
+
+  /* ---------------------------------------------------------------- readouts */
+  .readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+  .readout {
+    background: var(--sage-3); border-radius: var(--radius); padding: 10px 12px 8px;
+  }
+  .readout .label { font-size: .85rem; color: var(--ink-2); }
+  .readout .value {
+    font-family: var(--mono); font-size: 1.75rem; font-weight: 500; line-height: 1.15;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .readout .unit { font-family: var(--mono); font-size: .95rem; color: var(--ink-2); margin-left: 3px; }
+
+  /* ---------------------------------------------------------------- LED select */
+  .leds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+  .led {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 10px 4px 9px; border: 1px solid var(--sage-2); border-radius: var(--radius);
+    background: var(--panel); font-size: .9rem; transition: border-color .15s;
+  }
+  .led:hover:not(:disabled) { border-color: var(--sage); }
+  .led .lamp {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--sage-2); border: 2px solid var(--sage-2);
+    transition: background .15s, box-shadow .15s;
+  }
+  .led[data-led="R"] .lamp { border-color: var(--led-r); }
+  .led[data-led="A"] .lamp { border-color: var(--led-a); }
+  .led[data-led="G"] .lamp { border-color: var(--led-g); }
+  .led[data-led="B"] .lamp { border-color: var(--led-b); }
+  .led[aria-pressed="true"] { border-color: var(--ink-2); }
+  .led[aria-pressed="true"][data-led="R"] .lamp { background: var(--led-r); box-shadow: 0 0 14px 3px color-mix(in srgb, var(--led-r) 55%, transparent); }
+  .led[aria-pressed="true"][data-led="A"] .lamp { background: var(--led-a); box-shadow: 0 0 14px 3px color-mix(in srgb, var(--led-a) 55%, transparent); }
+  .led[aria-pressed="true"][data-led="G"] .lamp { background: var(--led-g); box-shadow: 0 0 14px 3px color-mix(in srgb, var(--led-g) 55%, transparent); }
+  .led[aria-pressed="true"][data-led="B"] .lamp { background: var(--led-b); box-shadow: 0 0 14px 3px color-mix(in srgb, var(--led-b) 55%, transparent); }
+  .led-off { width: 100%; margin-bottom: 18px; }
+
+  /* ---------------------------------------------------------------- slider */
+  .field { margin-bottom: 14px; }
+  .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: .9rem; color: var(--ink-2); margin-bottom: 6px; }
+  .field label output { font-family: var(--mono); color: var(--ink); font-size: 1rem; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--moss); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input[type=number] {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--sage-2); border-radius: var(--radius);
+    background: var(--panel); font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .row .suffix { color: var(--ink-2); font-size: .9rem; white-space: nowrap; }
+  .hint { font-size: .85rem; color: var(--ink-3); margin: 4px 0 0; }
+
+  /* ---------------------------------------------------------------- chart */
+  .chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .chart-head h2 { margin: 0; }
+  .chart-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .9rem; color: var(--ink-2); margin: 6px 0 2px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend svg { width: 14px; height: 14px; }
+  canvas#iv { width: 100%; height: 420px; display: block; touch-action: none; }
+  .chart-wrap { position: relative; }
+  .tip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--ink); color: var(--paper); font-size: .85rem; padding: 6px 9px;
+    border-radius: 4px; white-space: nowrap; font-family: var(--mono); font-variant-numeric: tabular-nums;
+    transform: translate(12px, -50%);
+  }
+  table.data { width: 100%; border-collapse: collapse; font-size: .9rem; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  table.data th, table.data td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--sage-3); }
+  table.data th { color: var(--ink-2); font-weight: 500; font-family: var(--font); }
+  table.data td:first-child, table.data th:first-child { text-align: left; }
+  .table-wrap { max-height: 300px; overflow: auto; margin-top: 8px; }
+  .hidden { display: none !important; }
+
+  /* ---------------------------------------------------------------- sweep + log */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+  .sweep-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .progress { height: 6px; background: var(--sage-3); border-radius: 3px; overflow: hidden; margin: 12px 0 10px; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--moss); transition: width .1s linear; }
+  .log {
+    font-family: var(--mono); font-size: .8rem; line-height: 1.45; background: var(--sage-3);
+    border-radius: var(--radius); padding: 10px 12px; height: 200px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-all; color: var(--ink-2);
+  }
+  .log .tx { color: var(--moss); }
+  .log .err { color: var(--err); }
+  .log-send { display: flex; gap: 8px; margin-top: 8px; }
+  .log-send input { flex: 1; padding: 6px 8px; border: 1px solid var(--sage-2); border-radius: var(--radius); background: var(--panel); font-family: var(--mono); }
+
+  /* ---------------------------------------------------------------- firmware */
+  section.firmware { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--sage-2); }
+  section.firmware h2 { font-size: 1.25rem; margin: 0 0 6px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+  .step { background: var(--panel); border: 1px solid var(--sage-2); border-radius: var(--radius); padding: 16px 18px; }
+  .step > b { display: block; margin-bottom: 4px; }
+  .step p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+  code { font-family: var(--mono); font-size: .9em; background: var(--sage-3); padding: 1px 5px; border-radius: 3px; }
+  footer { margin-top: 36px; color: var(--ink-3); font-size: .9rem; }
+  footer a { color: var(--ink-2); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <h1>LED I–V Lab</h1>
+    <p class="sub">Measure the forward voltage and current of four LEDs from your browser.</p>
+  </div>
+  <nav>
+    <a href="#firmware">Firmware</a>
+    <a href="https://github.com/interactive-hardware-interfacing/led-iv-lab">Source</a>
+    <a href="https://interactive-hardware-interfacing.github.io/">All tools</a>
+  </nav>
+</header>
+
+<div class="connect">
+  <button class="btn primary" id="connectBtn">Connect to board</button>
+  <button class="btn" id="demoBtn">Try without hardware</button>
+  <span class="status" id="status"><span class="dot"></span><span id="statusText">Not connected</span></span>
+</div>
+<p class="notice hidden" id="noSerial">
+  This browser can't open USB serial ports. Use <b>Chrome</b> or <b>Edge</b> on a laptop or desktop to connect to the board. The demo mode works anywhere.
+</p>
+
+<div class="bench">
+  <!-- ------------------------------------------------------------ instrument panel -->
+  <div>
+    <section class="panel" aria-label="Instrument">
+      <div class="readouts">
+        <div class="readout">
+          <div class="label">LED voltage</div>
+          <div><span class="value" id="vLed">—</span><span class="unit">V</span></div>
+        </div>
+        <div class="readout">
+          <div class="label">LED current</div>
+          <div><span class="value" id="iLed">—</span><span class="unit">mA</span></div>
+        </div>
+      </div>
+
+      <h2>LED</h2>
+      <div class="leds" role="group" aria-label="Select LED">
+        <button class="led" data-led="R" aria-pressed="false" disabled><span class="lamp"></span>Red</button>
+        <button class="led" data-led="A" aria-pressed="false" disabled><span class="lamp"></span>Amber</button>
+        <button class="led" data-led="G" aria-pressed="false" disabled><span class="lamp"></span>Green</button>
+        <button class="led" data-led="B" aria-pressed="false" disabled><span class="lamp"></span>Blue</button>
+      </div>
+      <button class="btn small led-off" id="ledOff" disabled>All LEDs off</button>
+
+      <h2>Drive voltage</h2>
+      <div class="field">
+        <label for="vSlider"><span>Gate voltage (A0)</span><output id="vOut">0.000 V</output></label>
+        <input type="range" id="vSlider" min="0" max="3.3" step="0.005" value="0" disabled>
+        <p class="hint">Selecting an LED resets this to 0 V, as the lab procedure requires.</p>
+      </div>
+
+      <h2>Sense resistor</h2>
+      <div class="field">
+        <div class="row">
+          <input type="number" id="rSense" value="100" min="0.1" step="0.1" aria-label="Sense resistor in ohms">
+          <span class="suffix">Ω</span>
+          <button class="btn small" id="rApply" disabled>Apply</button>
+        </div>
+        <p class="hint">Current = V<sub>resistor</sub> ÷ R. Check the value printed on the board.</p>
+      </div>
+
+      <label class="row" style="margin-top:6px"><input type="checkbox" id="liveChk" disabled> <span>Live readings (≈10 per second)</span></label>
+    </section>
+  </div>
+
+  <!-- ------------------------------------------------------------ chart -->
+  <div>
+    <section class="panel" aria-label="I–V curve">
+      <div class="chart-head">
+        <h2>I–V curve</h2>
+        <div class="chart-tools">
+          <button class="btn small" id="tableBtn" aria-pressed="false">Table</button>
+          <button class="btn small" id="csvBtn" disabled>Download CSV</button>
+          <button class="btn small" id="clearBtn" disabled>Clear points</button>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="chart-wrap" id="chartWrap">
+        <canvas id="iv" role="img" aria-label="Scatter plot of LED current against LED voltage, one series per LED colour"></canvas>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="table-wrap hidden" id="tableWrap">
+        <table class="data" id="dataTable">
+          <thead><tr><th>LED</th><th>Drive V</th><th>LED V</th><th>Current mA</th><th>V<sub>R</sub></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="two">
+      <section class="panel" aria-label="Automatic sweep">
+        <h2>Automatic sweep</h2>
+        <p class="hint" style="margin:0 0 10px">Steps the drive voltage for the selected LED and records each point.</p>
+        <div class="sweep-grid">
+          <div class="field"><label for="swStart">From</label><div class="row"><input type="number" id="swStart" value="0" min="0" max="3.3" step="0.01"><span class="suffix">V</span></div></div>
+          <div class="field"><label for="swStop">To</label><div class="row"><input type="number" id="swStop" value="3.3" min="0" max="3.3" step="0.01"><span class="suffix">V</span></div></div>
+          <div class="field"><label for="swStep">Step</label><div class="row"><input type="number" id="swStep" value="0.05" min="0.005" max="1" step="0.005"><span class="suffix">V</span></div></div>
+        </div>
+        <div class="progress"><i id="swBar"></i></div>
+        <div class="row">
+          <button class="btn primary" id="swStartBtn" disabled>Start sweep</button>
+          <button class="btn" id="swStopBtn" disabled>Stop</button>
+          <span class="hint" id="swMsg"></span>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Serial log">
+        <h2>Serial log</h2>
+        <div class="log" id="log" aria-live="polite"></div>
+        <form class="log-send" id="sendForm">
+          <input id="sendInput" placeholder="Type a command, e.g. HELP" autocomplete="off" disabled>
+          <button class="btn small" id="sendBtn" disabled>Send</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------ firmware -->
+<section class="firmware" id="firmware">
+  <h2>Put the firmware on the board</h2>
+  <p class="sub" style="margin:0;color:var(--ink-2)">One-time step for each ItsyBitsy M4. Nothing to install on your computer.</p>
+  <div class="steps">
+    <div class="step"><b>1. Download</b><p><a id="uf2Link" href="https://github.com/interactive-hardware-interfacing/led-iv-lab/releases/latest/download/led_iv_lab.uf2">led_iv_lab.uf2</a> — the latest build of the Arduino firmware.</p></div>
+    <div class="step"><b>2. Bootloader mode</b><p>Plug the board in over USB and press the reset button <em>twice</em>, quickly. The onboard LED turns a slow-pulsing colour and a drive called <code>ITSYM4BOOT</code> appears.</p></div>
+    <div class="step"><b>3. Drag and drop</b><p>Copy <code>led_iv_lab.uf2</code> onto <code>ITSYM4BOOT</code>. The drive disappears and the board restarts running the lab firmware.</p></div>
+    <div class="step"><b>4. Connect</b><p>Scroll up and click <b>Connect to board</b>. Pick the port named <em>ItsyBitsy M4</em> (or <em>USB Serial Device</em> on Windows).</p></div>
+  </div>
+  <p class="hint" style="margin-top:14px">Prefer CircuitPython? A matching <a href="https://github.com/interactive-hardware-interfacing/led-iv-lab/tree/main/firmware/circuitpython">code.py</a> speaks the same protocol — the page works with either. The full command set is in <a href="https://github.com/interactive-hardware-interfacing/led-iv-lab/blob/main/PROTOCOL.md">PROTOCOL.md</a>; type <code>HELP</code> in the serial log to see it from the board.</p>
+</section>
+
+<footer>
+  Part of <a href="https://interactive-hardware-interfacing.github.io/">Interactive Hardware Interfacing</a>. Works in Chrome and Edge via Web Serial. <a href="https://github.com/interactive-hardware-interfacing/led-iv-lab/blob/main/LICENSE">GPL-2.0</a>.
+</footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ================================================================ constants
+const LEDS = {
+  R: { name: 'Red',   css: '--led-r', marker: 'circle'   },
+  A: { name: 'Amber', css: '--led-a', marker: 'square'   },
+  G: { name: 'Green', css: '--led-g', marker: 'triangle' },
+  B: { name: 'Blue',  css: '--led-b', marker: 'diamond'  },
+};
+const V_MAX = 3.3;
+
+// ================================================================ dom
+const $ = id => document.getElementById(id);
+const ui = {
+  connectBtn: $('connectBtn'), demoBtn: $('demoBtn'), status: $('status'), statusText: $('statusText'),
+  noSerial: $('noSerial'), vLed: $('vLed'), iLed: $('iLed'),
+  ledBtns: [...document.querySelectorAll('.led')], ledOff: $('ledOff'),
+  vSlider: $('vSlider'), vOut: $('vOut'), rSense: $('rSense'), rApply: $('rApply'), liveChk: $('liveChk'),
+  tableBtn: $('tableBtn'), csvBtn: $('csvBtn'), clearBtn: $('clearBtn'), legend: $('legend'),
+  canvas: $('iv'), chartWrap: $('chartWrap'), tip: $('tip'), tableWrap: $('tableWrap'), tbody: $('dataTable').querySelector('tbody'),
+  swStart: $('swStart'), swStop: $('swStop'), swStep: $('swStep'), swBar: $('swBar'),
+  swStartBtn: $('swStartBtn'), swStopBtn: $('swStopBtn'), swMsg: $('swMsg'),
+  log: $('log'), sendForm: $('sendForm'), sendInput: $('sendInput'), sendBtn: $('sendBtn'),
+};
+
+// ================================================================ state
+const state = {
+  link: null,            // SerialLink or DemoLink
+  led: 'OFF',
+  driveV: 0,
+  rOhms: 100,
+  points: [],            // {led, dacV, vLed, iA, vRes, t}
+  live: false,
+  sweeping: false,
+  sweepAbort: false,
+};
+
+// ================================================================ log
+function log(line, cls) {
+  const el = document.createElement('div');
+  if (cls) el.className = cls;
+  el.textContent = line;
+  ui.log.appendChild(el);
+  while (ui.log.childElementCount > 400) ui.log.firstChild.remove();
+  ui.log.scrollTop = ui.log.scrollHeight;
+}
+
+// ================================================================ links
+// Both links expose: open(), close(), send(cmd) -> Promise<replyLine>, onLine(cb)
+class SerialLink {
+  constructor() { this.port = null; this.reader = null; this.writer = null; this.buf = ''; this.waiters = []; this.lineCb = null; this.closed = false; }
+  onLine(cb) { this.lineCb = cb; }
+  async open() {
+    this.port = await navigator.serial.requestPort();
+    await this.port.open({ baudRate: 115200 });
+    this.writer = this.port.writable.getWriter();
+    this.readLoop();
+  }
+  async readLoop() {
+    const dec = new TextDecoder();
+    try {
+      this.reader = this.port.readable.getReader();
+      while (true) {
+        const { value, done } = await this.reader.read();
+        if (done) break;
+        this.buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = this.buf.search(/[\r\n]/)) >= 0) {
+          const line = this.buf.slice(0, i); this.buf = this.buf.slice(i + 1);
+          if (line.length) this.dispatch(line);
+        }
+      }
+    } catch (e) {
+      if (!this.closed) { log('port error: ' + e.message, 'err'); disconnect(true); }
+    }
+  }
+  dispatch(line) {
+    log(line);
+    // M lines are measurements: they satisfy a pending MEAS, otherwise they stream
+    if (this.waiters.length) { const w = this.waiters.shift(); w.resolve(line); return; }
+    if (this.lineCb) this.lineCb(line);
+  }
+  send(cmd, timeoutMs = 2000) {
+    return new Promise((resolve, reject) => {
+      const w = { resolve, reject };
+      w.timer = setTimeout(() => { const i = this.waiters.indexOf(w); if (i >= 0) this.waiters.splice(i, 1); reject(new Error('no reply to ' + cmd)); }, timeoutMs);
+      const orig = w.resolve; w.resolve = v => { clearTimeout(w.timer); orig(v); };
+      this.waiters.push(w);
+      log('> ' + cmd, 'tx');
+      this.writer.write(new TextEncoder().encode(cmd + '\n')).catch(reject);
+    });
+  }
+  async close() {
+    this.closed = true;
+    try { if (this.reader) { await this.reader.cancel(); this.reader.releaseLock(); } } catch {}
+    try { if (this.writer) { this.writer.releaseLock(); } } catch {}
+    try { if (this.port) await this.port.close(); } catch {}
+  }
+}
+
+// Demo: a fake board with Shockley-ish diodes. Same interface as SerialLink.
+class DemoLink {
+  constructor() { this.led = 'OFF'; this.dac = 0; this.r = 100; this.stream = false; this.lineCb = null; this.timer = null; }
+  onLine(cb) { this.lineCb = cb; }
+  async open() { log('demo board ready (no hardware)', 'tx'); }
+  // Crude LED model: Vf knee and series resistance per colour, drive through a FET-ish transfer.
+  model() {
+    const p = { R: [1.75, 9], A: [1.95, 10], G: [2.05, 12], B: [2.65, 14] }[this.led];
+    if (!p) return { vLed: 0, vRes: 0 };
+    const [vf, rs] = p;
+    // Gate voltage maps to an available supply via a soft threshold around 1.6 V.
+    const vAvail = Math.max(0, (this.dac - 1.6)) * 2.6 * (1 - Math.exp(-this.dac));
+    const n = 0.0259 * 2.2, is = 1e-10;
+    // Solve series: vAvail = vLed + i*(rs + R), i = is*(exp((vLed-?)/n)) — iterate.
+    let i = 0, vLed = 0;
+    for (let k = 0; k < 40; k++) {
+      vLed = Math.min(vAvail, n * Math.log(i / is + 1) + (vf - n * Math.log(0.01 / is + 1)));
+      if (vLed < 0) vLed = 0;
+      const iNew = Math.max(0, (vAvail - vLed) / (rs + this.r));
+      i = 0.5 * i + 0.5 * iNew;
+    }
+    if (vAvail <= 0) { i = 0; vLed = 0; }
+    const noise = () => (Math.random() - 0.5) * 0.004;
+    return { vLed: Math.max(0, vLed + noise()), vRes: Math.max(0, i * this.r + noise()) };
+  }
+  mline() { const m = this.model(); return `M ${m.vLed.toFixed(3)} ${(m.vRes / this.r).toFixed(6)} ${m.vRes.toFixed(3)} ${this.dac.toFixed(3)} ${this.led}`; }
+  send(cmd) {
+    log('> ' + cmd, 'tx');
+    const [c, a] = cmd.trim().toUpperCase().split(/\s+/);
+    let reply;
+    switch (c) {
+      case 'ID': reply = 'ID LEDLAB 1.0.0 demo Browser'; break;
+      case 'LED': this.led = (a === 'OFF' || !'RAGB'.includes(a)) ? 'OFF' : a; this.dac = 0; reply = 'OK LED ' + this.led; break;
+      case 'SET': this.dac = Math.min(V_MAX, Math.max(0, parseFloat(a) || 0)); this.dac = Math.round(this.dac / V_MAX * 4095) * V_MAX / 4095; reply = 'OK SET ' + this.dac.toFixed(3); break;
+      case 'MEAS': reply = this.mline(); break;
+      case 'STREAM': this.stream = a === '1'; this.setStream(); reply = 'OK STREAM ' + (this.stream ? 1 : 0); break;
+      case 'R': if (a) this.r = parseFloat(a) || this.r; reply = 'OK R ' + this.r.toFixed(3); break;
+      case 'STATE': reply = `S ${this.led} ${this.dac.toFixed(3)} ${this.r.toFixed(3)} ${this.stream ? 1 : 0}`; break;
+      case 'HELP': reply = 'LED I-V Lab (demo)\n  ID, LED R|A|G|B|OFF, SET <v>, MEAS, STREAM 1|0, R [<ohms>], STATE\nOK HELP'; break;
+      default: reply = 'ERR unknown command ' + c;
+    }
+    return new Promise(res => setTimeout(() => { reply.split('\n').forEach(l => log(l)); res(reply.split('\n').pop()); }, c === 'MEAS' ? 55 : 5));
+  }
+  setStream() {
+    clearInterval(this.timer); this.timer = null;
+    if (this.stream) this.timer = setInterval(() => { const l = this.mline(); log(l); if (this.lineCb) this.lineCb(l); }, 90);
+  }
+  async close() { clearInterval(this.timer); }
+}
+
+// ================================================================ connect / disconnect
+function setStatus(text, cls) { ui.statusText.textContent = text; ui.status.className = 'status ' + (cls || ''); }
+function setEnabled(on) {
+  [ui.ledOff, ui.vSlider, ui.rApply, ui.liveChk, ui.sendInput, ui.sendBtn, ui.swStartBtn].forEach(e => e.disabled = !on);
+  ui.ledBtns.forEach(b => b.disabled = !on);
+  ui.demoBtn.disabled = on && state.link instanceof SerialLink;
+  ui.connectBtn.textContent = on ? 'Disconnect' : 'Connect to board';
+  if (!on) { ui.vLed.textContent = '—'; ui.iLed.textContent = '—'; }
+}
+
+async function connect(demo) {
+  if (state.link) return;
+  const link = demo ? new DemoLink() : new SerialLink();
+  try {
+    await link.open();
+    const id = await link.send('ID');
+    if (!id.startsWith('ID LEDLAB')) throw new Error('that port did not answer as an LED lab board');
+    state.link = link;
+    link.onLine(handleStreamLine);
+    setStatus(demo ? 'Demo mode — simulated board' : 'Connected · ' + id.replace('ID LEDLAB ', ''), demo ? 'demo' : 'ok');
+    setEnabled(true);
+    await link.send('R ' + parseFloat(ui.rSense.value));
+    state.rOhms = parseFloat(ui.rSense.value);
+    await selectLed('OFF');
+  } catch (e) {
+    log('connect failed: ' + e.message, 'err');
+    setStatus('Connection failed — ' + e.message, 'err');
+    try { await link.close(); } catch {}
+  }
+}
+
+async function disconnect(silent) {
+  if (!state.link) return;
+  const link = state.link;
+  state.sweepAbort = true; state.live = false; ui.liveChk.checked = false;
+  try { if (!silent) { await link.send('STREAM 0'); await link.send('LED OFF'); } } catch {}
+  await link.close();
+  state.link = null; state.led = 'OFF'; state.driveV = 0;
+  setEnabled(false); refreshLedButtons(); setSlider(0);
+  setStatus('Not connected', '');
+}
+
+// ================================================================ instrument actions
+async function selectLed(which) {
+  if (!state.link) return;
+  const r = await state.link.send('LED ' + which);
+  if (r.startsWith('OK')) { state.led = which; state.driveV = 0; setSlider(0); refreshLedButtons(); }
+}
+function refreshLedButtons() { ui.ledBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.led === state.led))); }
+function setSlider(v) { ui.vSlider.value = v; ui.vOut.textContent = v.toFixed(3) + ' V'; }
+
+let setPending = null;
+async function setDrive(v) {
+  state.driveV = v; ui.vOut.textContent = v.toFixed(3) + ' V';
+  if (!state.link) return;
+  // Coalesce rapid slider moves: one SET in flight at a time, latest value wins.
+  if (setPending) { setPending.next = v; return; }
+  setPending = { next: null };
+  try {
+    let cur = v;
+    while (true) {
+      await state.link.send('SET ' + cur.toFixed(3));
+      if (!state.live) await measureOnce();
+      if (setPending.next == null) break;
+      cur = setPending.next; setPending.next = null;
+    }
+  } finally { setPending = null; }
+}
+
+function parseM(line) {
+  const p = line.split(/\s+/);
+  if (p[0] !== 'M' || p.length < 6) return null;
+  return { vLed: +p[1], iA: +p[2], vRes: +p[3], dacV: +p[4], led: p[5] };
+}
+function showReading(m) {
+  ui.vLed.textContent = m.vLed.toFixed(3);
+  ui.iLed.textContent = (m.iA * 1000).toFixed(2);
+}
+function addPoint(m) {
+  if (m.led === 'OFF') return;
+  state.points.push({ ...m, t: Date.now() });
+  ui.csvBtn.disabled = ui.clearBtn.disabled = false;
+  chart.dirty = true;
+  if (!ui.tableWrap.classList.contains('hidden')) renderTable();
+}
+async function measureOnce() {
+  if (!state.link) return null;
+  const m = parseM(await state.link.send('MEAS'));
+  if (m) { showReading(m); addPoint(m); }
+  return m;
+}
+function handleStreamLine(line) {
+  const m = parseM(line);
+  if (m) { showReading(m); if (!state.sweeping) addPoint(m); }
+}
+
+async function setLive(on) {
+  state.live = on;
+  if (state.link) await state.link.send('STREAM ' + (on ? 1 : 0));
+}
+
+// ================================================================ sweep
+async function runSweep() {
+  if (!state.link || state.sweeping) return;
+  if (state.led === 'OFF') { ui.swMsg.textContent = 'Select an LED first.'; return; }
+  const from = clamp(+ui.swStart.value, 0, V_MAX), to = clamp(+ui.swStop.value, 0, V_MAX), step = Math.max(0.005, Math.abs(+ui.swStep.value) || 0.05);
+  const n = Math.floor(Math.abs(to - from) / step + 1e-9) + 1;
+  const dir = to >= from ? 1 : -1;
+  state.sweeping = true; state.sweepAbort = false;
+  ui.swStartBtn.disabled = true; ui.swStopBtn.disabled = false; ui.swMsg.textContent = '';
+  const wasLive = state.live; if (wasLive) await setLive(false);
+  try {
+    for (let k = 0; k < n; k++) {
+      if (state.sweepAbort || !state.link) break;
+      const v = from + dir * k * step;
+      await state.link.send('SET ' + v.toFixed(3));
+      state.driveV = v; setSlider(v);
+      const m = parseM(await state.link.send('MEAS'));
+      if (m) { showReading(m); addPoint(m); }
+      ui.swBar.style.width = ((k + 1) / n * 100).toFixed(1) + '%';
+    }
+    ui.swMsg.textContent = state.sweepAbort ? 'Stopped.' : `Done — ${n} points.`;
+  } catch (e) { ui.swMsg.textContent = 'Sweep failed: ' + e.message; }
+  finally {
+    // Leave the LED at 0 V after a sweep so nothing sits hot on the bench.
+    try { if (state.link) { await state.link.send('SET 0'); state.driveV = 0; setSlider(0); } } catch {}
+    state.sweeping = false; ui.swStartBtn.disabled = !state.link; ui.swStopBtn.disabled = true;
+    if (wasLive && state.link) await setLive(true);
+  }
+}
+const clamp = (v, a, b) => Math.min(b, Math.max(a, isFinite(v) ? v : a));
+
+// ================================================================ chart
+const chart = { dirty: true, hover: null, scale: null };
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+function drawMarker(ctx, type, x, y, r, fill) {
+  ctx.beginPath();
+  switch (type) {
+    case 'square':   ctx.rect(x - r, y - r, 2 * r, 2 * r); break;
+    case 'triangle': ctx.moveTo(x, y - r * 1.15); ctx.lineTo(x + r * 1.1, y + r * 0.8); ctx.lineTo(x - r * 1.1, y + r * 0.8); ctx.closePath(); break;
+    case 'diamond':  ctx.moveTo(x, y - r * 1.2); ctx.lineTo(x + r * 1.2, y); ctx.lineTo(x, y + r * 1.2); ctx.lineTo(x - r * 1.2, y); ctx.closePath(); break;
+    default:         ctx.arc(x, y, r, 0, Math.PI * 2);
+  }
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = cssVar('--panel'); ctx.stroke();
+}
+function niceStep(range, target) {
+  const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+function renderChart() {
+  const c = ui.canvas, dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth, H = c.clientHeight;
+  if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr; }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const pad = { l: 58, r: 18, t: 14, b: 44 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+
+  const pts = state.points;
+  let xMax = 3.5, yMax = 1;
+  for (const p of pts) { xMax = Math.max(xMax, p.vLed * 1.05); yMax = Math.max(yMax, p.iA * 1000 * 1.1); }
+  yMax = Math.ceil(yMax / niceStep(yMax, 5)) * niceStep(yMax, 5);
+  const sx = v => pad.l + v / xMax * pw, sy = i => pad.t + ph - i / yMax * ph;
+  chart.scale = { sx, sy, pad, pw, ph, xMax, yMax };
+
+  // grid + axes
+  ctx.font = '12px ' + cssVar('--font'); ctx.fillStyle = cssVar('--ink-2'); ctx.strokeStyle = cssVar('--sage-3'); ctx.lineWidth = 1;
+  const xs = niceStep(xMax, 7), ys = niceStep(yMax, 5);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let v = 0; v <= xMax + 1e-9; v += xs) { const x = sx(v); ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ph); ctx.stroke(); ctx.fillText(v.toFixed(xs < 1 ? 1 : 0), x, pad.t + ph + 6); }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let i = 0; i <= yMax + 1e-9; i += ys) { const y = sy(i); ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke(); ctx.fillText(+i.toFixed(3), pad.l - 8, y); }
+  ctx.strokeStyle = cssVar('--sage'); ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph); ctx.lineTo(pad.l + pw, pad.t + ph); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillStyle = cssVar('--ink-2');
+  ctx.fillText('LED voltage (V)', pad.l + pw / 2, H - 4);
+  ctx.save(); ctx.translate(14, pad.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.fillText('LED current (mA)', 0, 0); ctx.restore();
+
+  if (!pts.length) {
+    ctx.fillStyle = cssVar('--ink-3'); ctx.textBaseline = 'middle';
+    ctx.fillText(state.link ? 'Select an LED and move the slider, or start a sweep.' : 'Connect a board or try the demo to start plotting.', pad.l + pw / 2, pad.t + ph / 2);
+    return;
+  }
+
+  // series, drawn in fixed LED order; line through points sorted by vLed, then markers
+  const placedLabels = [];
+  for (const key of Object.keys(LEDS)) {
+    const s = pts.filter(p => p.led === key); if (!s.length) continue;
+    const col = cssVar(LEDS[key].css);
+    const sorted = [...s].sort((a, b) => a.vLed - b.vLed);
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = .55; ctx.beginPath();
+    sorted.forEach((p, k) => k ? ctx.lineTo(sx(p.vLed), sy(p.iA * 1000)) : ctx.moveTo(sx(p.vLed), sy(p.iA * 1000)));
+    ctx.stroke(); ctx.globalAlpha = 1;
+    for (const p of s) drawMarker(ctx, LEDS[key].marker, sx(p.vLed), sy(p.iA * 1000), 4.5, col);
+    // direct label at the series' last (highest-V) point
+    const last = sorted[sorted.length - 1];
+    let lx = Math.min(sx(last.vLed) + 8, pad.l + pw - 44), ly = sy(last.iA * 1000) - 6;
+    // push the label down if it would sit on top of an earlier one
+    for (const o of placedLabels) if (Math.abs(o.x - lx) < 48 && Math.abs(o.y - ly) < 14) ly = o.y + 15;
+    placedLabels.push({ x: lx, y: ly });
+    ctx.fillStyle = cssVar('--ink'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(LEDS[key].name, lx, ly);
+  }
+  // hover ring
+  if (chart.hover) { const p = chart.hover; ctx.beginPath(); ctx.arc(sx(p.vLed), sy(p.iA * 1000), 8, 0, Math.PI * 2); ctx.strokeStyle = cssVar('--ink'); ctx.lineWidth = 1.5; ctx.stroke(); }
+}
+function tick() { if (chart.dirty) { chart.dirty = false; renderChart(); } requestAnimationFrame(tick); }
+new ResizeObserver(() => chart.dirty = true).observe(ui.canvas);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { chart.dirty = true; buildLegend(); });
+
+ui.canvas.addEventListener('pointermove', e => {
+  if (!chart.scale || !state.points.length) return;
+  const r = ui.canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  let best = null, bd = 14 * 14;
+  for (const p of state.points) { const dx = chart.scale.sx(p.vLed) - mx, dy = chart.scale.sy(p.iA * 1000) - my, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = p; } }
+  if (best !== chart.hover) { chart.hover = best; chart.dirty = true; }
+  if (best) {
+    ui.tip.style.display = 'block'; ui.tip.style.left = chart.scale.sx(best.vLed) + 'px'; ui.tip.style.top = chart.scale.sy(best.iA * 1000) + 'px';
+    ui.tip.textContent = `${LEDS[best.led].name}  ${best.vLed.toFixed(3)} V  ${(best.iA * 1000).toFixed(2)} mA  (drive ${best.dacV.toFixed(2)} V)`;
+  } else ui.tip.style.display = 'none';
+});
+ui.canvas.addEventListener('pointerleave', () => { chart.hover = null; chart.dirty = true; ui.tip.style.display = 'none'; });
+
+function buildLegend() {
+  ui.legend.innerHTML = '';
+  for (const [k, l] of Object.entries(LEDS)) {
+    const col = cssVar(l.css);
+    const shape = { circle: `<circle cx="7" cy="7" r="5"/>`, square: `<rect x="2" y="2" width="10" height="10"/>`,
+      triangle: `<polygon points="7,1.5 13,12.5 1,12.5"/>`, diamond: `<polygon points="7,1 13,7 7,13 1,7"/>` }[l.marker];
+    const s = document.createElement('span');
+    s.innerHTML = `<svg viewBox="0 0 14 14" fill="${col}">${shape}</svg>${l.name}`;
+    ui.legend.appendChild(s);
+  }
+}
+buildLegend();
+
+// ================================================================ table + csv
+function renderTable() {
+  ui.tbody.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (const p of state.points) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${LEDS[p.led]?.name || p.led}</td><td>${p.dacV.toFixed(3)}</td><td>${p.vLed.toFixed(3)}</td><td>${(p.iA * 1000).toFixed(3)}</td><td>${p.vRes.toFixed(3)}</td>`;
+    frag.appendChild(tr);
+  }
+  ui.tbody.appendChild(frag);
+}
+function downloadCsv() {
+  const rows = [['timestamp_iso', 'led', 'drive_v', 'led_v', 'current_a', 'current_ma', 'sense_v', 'sense_ohms']];
+  for (const p of state.points) rows.push([new Date(p.t).toISOString(), LEDS[p.led]?.name || p.led, p.dacV.toFixed(3), p.vLed.toFixed(3), p.iA.toFixed(6), (p.iA * 1000).toFixed(3), p.vRes.toFixed(3), state.rOhms]);
+  const blob = new Blob([rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'led-iv-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ================================================================ wiring
+const hasSerial = 'serial' in navigator;
+if (!hasSerial) { ui.noSerial.classList.remove('hidden'); ui.connectBtn.disabled = true; }
+
+ui.connectBtn.addEventListener('click', () => state.link ? disconnect() : connect(false));
+ui.demoBtn.addEventListener('click', () => state.link ? disconnect() : connect(true));
+ui.ledBtns.forEach(b => b.addEventListener('click', () => selectLed(b.dataset.led)));
+ui.ledOff.addEventListener('click', () => selectLed('OFF'));
+ui.vSlider.addEventListener('input', () => setDrive(+ui.vSlider.value));
+ui.rApply.addEventListener('click', async () => {
+  const r = parseFloat(ui.rSense.value);
+  if (!(r > 0)) { ui.rSense.focus(); return; }
+  if (state.link) { const rep = await state.link.send('R ' + r); if (rep.startsWith('OK')) state.rOhms = r; }
+  else state.rOhms = r;
+});
+ui.liveChk.addEventListener('change', () => setLive(ui.liveChk.checked));
+ui.tableBtn.addEventListener('click', () => {
+  const show = ui.tableWrap.classList.toggle('hidden') === false;
+  ui.tableBtn.setAttribute('aria-pressed', String(show));
+  if (show) renderTable();
+});
+ui.csvBtn.addEventListener('click', downloadCsv);
+ui.clearBtn.addEventListener('click', () => { state.points = []; chart.dirty = true; renderTable(); ui.csvBtn.disabled = ui.clearBtn.disabled = true; });
+ui.swStartBtn.addEventListener('click', runSweep);
+ui.swStopBtn.addEventListener('click', () => state.sweepAbort = true);
+ui.sendForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const cmd = ui.sendInput.value.trim(); if (!cmd || !state.link) return;
+  ui.sendInput.value = '';
+  try {
+    const rep = await state.link.send(cmd);
+    // keep UI in sync when a student types LED/SET/R by hand
+    const m = parseM(rep); if (m) { showReading(m); addPoint(m); }
+    if (rep.startsWith('OK LED')) { state.led = rep.split(' ')[2]; state.driveV = 0; setSlider(0); refreshLedButtons(); }
+    if (rep.startsWith('OK SET')) { state.driveV = +rep.split(' ')[2]; setSlider(state.driveV); }
+    if (rep.startsWith('OK R')) { state.rOhms = +rep.split(' ')[2]; ui.rSense.value = state.rOhms; }
+  } catch (err) { log(err.message, 'err'); }
+});
+window.addEventListener('beforeunload', () => { if (state.link instanceof SerialLink) { try { state.link.writer.write(new TextEncoder().encode('STREAM 0\nLED OFF\n')); } catch {} } });
+if (hasSerial) navigator.serial.addEventListener('disconnect', () => { if (state.link instanceof SerialLink) disconnect(true); });
+
+tick();
+})();
+</script>
+</body>
+</html>

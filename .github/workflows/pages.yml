@@ -1,0 +1,41 @@
+# Publishes the web instrument to GitHub Pages.
+# Alternative: skip this file and set Settings → Pages → Source to "Deploy from
+# a branch" (main, /). This workflow exists so the Pages source is explicit and
+# so the firmware folder is not part of the published site.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['firmware/**', '.github/workflows/firmware.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp PROTOCOL.md _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
