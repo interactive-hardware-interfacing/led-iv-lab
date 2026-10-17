@@ -123,6 +123,4 @@ link points. Before tagging:
 
 ## License
 
-GPL-2.0 — see [LICENSE](LICENSE). The same license as the maintainer's
-[tinySA_python](https://github.com/LC-Linkous/tinySA_python) and
-[nanoVNA_python](https://github.com/LC-Linkous/nanoVNA_python) libraries.
+GPL-2.0 — see [LICENSE](LICENSE). 
