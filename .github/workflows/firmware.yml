@@ -12,7 +12,14 @@ on:
     paths: ['firmware/arduino/**', '.github/workflows/firmware.yml']
   pull_request:
     paths: ['firmware/arduino/**']
+  release:
+    types: [published]          # release created in the GitHub UI
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach the .uf2 to (e.g. v1.0.0). Leave blank to just build."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -20,8 +27,14 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # The tag this build belongs to, from whichever event started it.
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || '') }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # On a manual run for a tag, build that tag's source, not main.
+          ref: ${{ env.RELEASE_TAG || github.ref }}
 
       # Arduino's own install script, pinned to a release. (arduino/setup-arduino-cli
       # still targets Node 20; this avoids the deprecation warning entirely.)
@@ -63,8 +76,11 @@ jobs:
           path: build/led_iv_lab.uf2
 
       - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: build/led_iv_lab.uf2
           generate_release_notes: true
+          # Replace an existing led_iv_lab.uf2 on the release when re-run.
+          overwrite_files: true
