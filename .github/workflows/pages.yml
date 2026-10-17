@@ -33,6 +33,11 @@ jobs:
           mkdir -p _site
           cp index.html _site/
           cp PROTOCOL.md _site/
+      - name: Stamp last-updated date from the commit
+        run: |
+          D=$(git log -1 --format=%cs)   # YYYY-MM-DD of the deployed commit
+          sed -i "s|<time id=\"updated\" datetime=\"[0-9-]*\">[0-9-]*</time>|<time id=\"updated\" datetime=\"$D\">$D</time>|" _site/index.html
+          grep -o '<time id="updated"[^<]*</time>' _site/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
