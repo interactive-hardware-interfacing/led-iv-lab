@@ -105,8 +105,10 @@ before it closes the port. Sweeps end at 0 V.
 ## Contributing
 
 Bug reports, measurement oddities, and ideas from the lab bench are all welcome —
-see [CONTRIBUTING.md](CONTRIBUTING.md) and the issue templates. This project
-follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+see [CONTRIBUTING.md](CONTRIBUTING.md) and the issue templates. 
+
+
+This project has a short [Code of Conduct(CODE_OF_CONDUCT.md). 
 
 ## Releasing
 
@@ -123,4 +125,6 @@ link points. Before tagging:
 
 ## License
 
-GPL-2.0 — see [LICENSE](LICENSE). 
+GPL-2.0 — see [LICENSE](LICENSE). The same license as the maintainer's
+[tinySA_python](https://github.com/LC-Linkous/tinySA_python) and
+[nanoVNA_python](https://github.com/LC-Linkous/nanoVNA_python) libraries.

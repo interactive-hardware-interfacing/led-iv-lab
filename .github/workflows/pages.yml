@@ -27,7 +27,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Stage site
         run: |
           mkdir -p _site
@@ -38,9 +38,9 @@ jobs:
           D=$(git log -1 --format=%cs)   # YYYY-MM-DD of the deployed commit
           sed -i "s|<time id=\"updated\" datetime=\"[0-9-]*\">[0-9-]*</time>|<time id=\"updated\" datetime=\"$D\">$D</time>|" _site/index.html
           grep -o '<time id="updated"[^<]*</time>' _site/index.html
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
