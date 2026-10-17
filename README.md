@@ -11,7 +11,7 @@ Works in Chrome and Edge (they implement [Web Serial](https://developer.mozilla.
 The page also has a *Try without hardware* mode with a simulated board, so it can
 be previewed anywhere.
 
-<!-- screenshot: media/screenshot.png -->
+<p align="center"><img src="media/screenshot.png" alt="The LED I–V Lab page in demo mode: instrument panel on the left with the green LED selected, and an I–V chart on the right showing four curves, one per LED colour" width="900"></p>
 
 ## What's in the repo
 
@@ -101,6 +101,19 @@ Full command list in [PROTOCOL.md](PROTOCOL.md), or type `HELP`.
 The firmware turns every LED switch off and sets the DAC to 0 V on power-up,
 on `LED OFF`, when the USB host disconnects, and the page sends `LED OFF`
 before it closes the port. Sweeps end at 0 V.
+
+## Releasing
+
+Releases are tagged `vX.Y.Z`. Pushing a tag builds the Arduino firmware and
+attaches `led_iv_lab.uf2` to the release, which is where the page's download
+link points. Before tagging:
+
+1. Bump `FW_VERSION` in both firmware files and the version string in the
+   `index.html` footer so the three agree.
+2. Add an entry to `CHANGELOG.md`.
+3. `git tag v1.0.0 && git push origin main --tags`
+4. Watch the *firmware* workflow finish, then open the release and confirm the
+   `.uf2` is attached.
 
 ## License
 
