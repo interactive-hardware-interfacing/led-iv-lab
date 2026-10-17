@@ -1,0 +1,87 @@
+name: Bug report
+description: The page or firmware isn't behaving as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If the problem is that a **reading looks wrong**
+        (current reads zero, voltage off by a lot, curve in the wrong place),
+        please use the *Measurement problem* template instead — it asks for the
+        right details.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where is the problem?
+      options:
+        - Web page (live site)
+        - Web page (local copy / file://)
+        - Arduino firmware
+        - CircuitPython firmware
+        - Docs / README / PROTOCOL.md
+        - Build or deploy (GitHub Actions)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Click by click, or command by command if you were typing into the serial log.
+      placeholder: |
+        1. Connect to board
+        2. Click Green
+        3. Start sweep with step 0.05
+        4. …
+    validations:
+      required: true
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Was a board connected?
+      options:
+        - "Yes — ItsyBitsy M4 on the lab board"
+        - "Yes — ItsyBitsy M4, no lab board (bare module)"
+        - "No — demo mode"
+        - "Not sure"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: Paste the reply to `ID` from the serial log, e.g. `ID LEDLAB 1.0.0 arduino ItsyBitsyM4`. Leave blank in demo mode.
+      placeholder: "ID LEDLAB 1.0.0 arduino ItsyBitsyM4"
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "e.g. Chrome 130 / Edge 130 — from chrome://version"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. Windows 11 / Ubuntu 24.04 / macOS 15"
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Serial log
+      description: Copy the serial log panel from the page (or your terminal) around the time of the problem. `>` lines are what the page sent.
+      render: text
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      description: If it's a page problem — press F12, open *Console*, and paste anything red.
+      render: text

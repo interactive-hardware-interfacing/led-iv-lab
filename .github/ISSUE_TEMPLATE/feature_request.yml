@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest an improvement to the page, the firmware, or the lab flow
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas from people who've run this in a lab section are the most useful
+        kind. Say what you were trying to do, not just what you want added.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What were you (or your students) trying to do that the page doesn't support, or makes awkward?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would it look like? A sketch of the control, the command, or the output is helpful.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Page — controls / instrument panel
+        - Page — chart / table / export
+        - Page — sweep
+        - Page — firmware instructions / onboarding
+        - Protocol (new or changed command)
+        - Arduino firmware
+        - CircuitPython firmware
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: protocol
+    attributes:
+      label: Protocol impact
+      options:
+        - label: This would need a change to PROTOCOL.md (and therefore both firmwares, the page, and demo mode)
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds
+      description: Anything you're doing today instead — typing commands in the serial log, post-processing the CSV, etc.

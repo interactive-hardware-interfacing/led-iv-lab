@@ -1,0 +1,73 @@
+name: Measurement problem
+description: A reading, curve, or exported value looks wrong
+labels: ["measurement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for "the numbers don't make sense" — readings stuck at
+        zero, a DAC that doesn't reach 3.3 V, curves that don't look like
+        diodes, CSV values that disagree with the display. The more of the
+        board's actual output you can include, the faster this gets sorted.
+  - type: textarea
+    id: symptom
+    attributes:
+      label: What looks wrong
+      description: Which LED, which value, what you saw, and what you expected.
+      placeholder: "Green LED, drive at 2.4 V: page shows 0.00 mA but the LED is visibly lit."
+    validations:
+      required: true
+  - type: textarea
+    id: mline
+    attributes:
+      label: Raw M lines
+      description: Copy a few `M …` lines from the serial log for the problem case. These are what the board reported before the page did anything with them.
+      render: text
+      placeholder: |
+        > MEAS
+        M 2.051 0.000000 0.000 2.400 G
+    validations:
+      required: true
+  - type: input
+    id: resistor
+    attributes:
+      label: Sense resistor value used
+      description: The value in the page's *Sense resistor* box (and on the board, if labelled).
+      placeholder: "100 Ω"
+    validations:
+      required: true
+  - type: textarea
+    id: meter
+    attributes:
+      label: Independent measurement
+      description: If you had a multimeter on it — what did A0, A1, or the LED actually read? This is the single most useful field.
+      placeholder: "DMM on A0 at SET 3.300 reads 3.27 V. DMM across the green LED reads 2.05 V."
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: Reply to `ID` from the serial log.
+      placeholder: "ID LEDLAB 1.0.0 arduino ItsyBitsyM4"
+    validations:
+      required: true
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board
+      options:
+        - Lab PCB (final)
+        - Lab PCB (prototype / breadboard)
+        - Bare ItsyBitsy M4, no LED board
+    validations:
+      required: true
+  - type: textarea
+    id: csv
+    attributes:
+      label: CSV export
+      description: Drag the downloaded `led-iv-….csv` into this box, or paste the relevant rows.
+      render: csv
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: "Chrome 130 on Windows 11"

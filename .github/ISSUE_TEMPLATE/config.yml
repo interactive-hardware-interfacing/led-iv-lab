@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Open the tool
+    url: https://interactive-hardware-interfacing.github.io/led-iv-lab/
+    about: The live page. Try the demo mode first to see whether the problem needs a board to reproduce.
+  - name: Serial protocol reference
+    url: https://github.com/interactive-hardware-interfacing/led-iv-lab/blob/main/PROTOCOL.md
+    about: Every command and reply. Check here before reporting a firmware reply as wrong.
+  - name: ItsyBitsy M4 documentation (Adafruit)
+    url: https://learn.adafruit.com/introducing-adafruit-itsybitsy-m4
+    about: Bootloader mode, UF2 flashing, pinout, and CircuitPython install. Board-level problems (won't enter bootloader, no drive appears) are answered here.
+  - name: Web Serial browser support
+    url: https://caniuse.com/web-serial
+    about: Connect only works in Chrome and Edge. If your browser isn't listed as supported here, that's why.
